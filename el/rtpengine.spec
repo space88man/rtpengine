@@ -14,13 +14,13 @@ Conflicts:	%{name}-kernel < %{version}-%{release}
 BuildRequires:	gcc make pkgconfig redhat-rpm-config
 BuildRequires:	glib2-devel libcurl-devel openssl-devel pcre-devel
 BuildRequires:	xmlrpc-c-devel zlib-devel hiredis-devel
-BuildRequires:	libpcap-devel libevent-devel json-glib-devel 
+BuildRequires:	libpcap-devel libevent-devel json-glib-devel
 BuildRequires:	mosquitto-devel
 BuildRequires:	gperf perl-IPC-Cmd
 BuildRequires:	perl-podlators
 BuildRequires:	pkgconfig(libwebsockets)
 BuildRequires:	pkgconfig(spandsp)
-BuildRequires:	pkgconfig(opus)
+BuildRequires:	pkgconfig(opus) pkgconfig(libmnl) pkgconfig(libnftnl)
 Requires(pre):	shadow-utils
 
 %if 0%{?with_transcoding} > 0
@@ -29,7 +29,7 @@ Requires(pre):	ffmpeg-libs
 %endif
 
 Requires:	perl-Config-Tiny
-Requires:	nc
+Requires:	nc libmnl libnftnl
 # Remain compat with other installations
 Provides:	ngcp-rtpengine = %{version}-%{release}
 
@@ -65,6 +65,13 @@ Requires(preun): dkms
 %description dkms
 %{summary}.
 
+
+%package utils
+Summary:	Scripts and Perl modules for NGCP rtpengine
+
+%description utils
+%{summary}.
+
 %if 0%{?rhel} >= 8
 %define mysql_devel_pkg mariadb-devel
 %else
@@ -78,8 +85,8 @@ Group:		System Environment/Daemons
 BuildRequires:	gcc make redhat-rpm-config %{mysql_devel_pkg} ffmpeg-devel
 
 %description recording
-The Sipwise rtpengine media proxy has support for exporting media (RTP) packets 
-that it forwards. The rtpengine-recording daemon collects these exported packets 
+The Sipwise rtpengine media proxy has support for exporting media (RTP) packets
+that it forwards. The rtpengine-recording daemon collects these exported packets
 and decodes them into an audio format that can be listened to.
 
 %endif
@@ -105,16 +112,12 @@ cd ..
 %endif
 
 %install
-# Install the userspace daemon
-install -D -p -m755 daemon/%{binname} %{buildroot}%{_bindir}/%{binname}
+# Install the userspace daemon / recording
+make DESTDIR=%{buildroot} install
+
 # Install CLI (command line interface)
 install -D -p -m755 utils/%{binname}-ctl %{buildroot}%{_bindir}/%{binname}-ctl
 # Install helper
-install -D -p -m755 utils/%{binname}-get-table %{buildroot}%{_sbindir}/%{binname}-get-table
-# Install recording daemon
-%if 0%{?with_transcoding} > 0
-install -D -p -m755 recording-daemon/%{binname}-recording %{buildroot}%{_bindir}/%{binname}-recording
-%endif
 
 ## Install the init.d script and configuration file
 %if 0%{?has_systemd_dirs}
@@ -220,9 +223,7 @@ true
 # Userspace daemon
 %{_bindir}/%{binname}
 # CLI (command line interface)
-%{_bindir}/%{binname}-ctl
 # CLI table helper
-%{_sbindir}/%{binname}-get-table
 # init.d script and configuration file
 %if 0%{?has_systemd_dirs}
 %{_unitdir}/%{binname}.service
@@ -236,6 +237,18 @@ true
 %attr(0750,%{name},%{name}) %dir %{_var}/spool/%{binname}
 # Documentation
 %doc LICENSE README.md debian/changelog debian/copyright
+%{_mandir}/man8/%{binname}.8*
+
+
+%files utils
+# Userspace daemon
+%{_bindir}/%{binname}-ng-client
+%{_bindir}/%{binname}-ctl
+%{_bindir}/%{binname}-perftest
+%{_libexecdir}/%{binname}/%{binname}-get-table
+%{_mandir}/man1/%{binname}-ng-client.1*
+%{_mandir}/man1/%{binname}-ctl.1*
+
 
 %files kernel
 /%{_lib}/xtables/libxt_RTPENGINE.so
@@ -262,6 +275,7 @@ true
 # recording directory
 %attr(0750,%{name},%{name}) %dir %{_sharedstatedir}/%{binname}-recording
 %endif
+%{_mandir}/man8/%{binname}-recording.8*
 
 %changelog
 * Thu Nov 11 2021 Anton Voylenko <anton.voylenko@novait.com.ua>
@@ -272,10 +286,10 @@ true
   - update to ngcp-rtpengine version 6.4.0.0
   - add packet recording
 * Thu Nov 24 2016 Marcel Weinberg <marcel@ng-voice.com>
-  - Updated to ngcp-rtpengine version 4.5.0 and CentOS 7.2 
+  - Updated to ngcp-rtpengine version 4.5.0 and CentOS 7.2
   - created a new variable "binname" to use rtpengine as name for the binaries
     (still using ngcp-rtpenginge as name of the package and daemon - aligned to the .deb packages)
-  - fixed dependencies 
+  - fixed dependencies
 * Mon Nov 11 2013 Peter Dunkley <peter.dunkley@crocodilertc.net>
   - Updated version to 2.3.2
   - Set license to GPLv3
